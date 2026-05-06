@@ -127,6 +127,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cookie", help="Cookie string. If omitted, reads BOSS_COOKIE env var.")
     parser.add_argument("--delay-min", type=float, default=2.5, help="Minimum delay between requests.")
     parser.add_argument("--delay-max", type=float, default=6.0, help="Maximum delay between requests.")
+    parser.add_argument("--timeout", type=float, default=40.0, help="HTTP request timeout in seconds.")
+    parser.add_argument("--retries", type=int, default=2, help="Retries per request after timeout/network errors.")
     parser.add_argument("--analyze", action="store_true", help="Print salary and responsibility skill analysis.")
     parser.add_argument("--debug", action="store_true", help="Print response summary when a page returns no jobs.")
     parser.add_argument("--debug-out", default="boss_debug_response.json", help="Save the first empty response JSON here.")
@@ -300,13 +302,29 @@ def fetch_page(
     city: str,
     page: int,
     page_size: int,
+    timeout: float,
+    retries: int,
 ) -> dict[str, Any]:
     params = {"query": keyword, "city": city, "page": page, "pageSize": page_size}
-    resp = session.get(f"{search_url}?{urlencode(params)}", headers=headers, timeout=20)
-    if resp.status_code in {401, 403, 429}:
-        raise RuntimeError(f"Blocked or unauthenticated: HTTP {resp.status_code}. Refresh Cookie/headers and slow down.")
-    resp.raise_for_status()
-    return resp.json()
+    url = f"{search_url}?{urlencode(params)}"
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 2):
+        try:
+            resp = session.get(url, headers=headers, timeout=timeout)
+            if resp.status_code in {401, 403, 429}:
+                raise RuntimeError(
+                    f"Blocked or unauthenticated: HTTP {resp.status_code}. Refresh Cookie/headers and slow down."
+                )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            if attempt > retries:
+                break
+            sleep_seconds = min(10 * attempt, 30)
+            print(f"request failed, retry {attempt}/{retries}: {exc}")
+            time.sleep(sleep_seconds)
+    raise RuntimeError(f"Request failed after {retries + 1} attempts: {last_error}") from last_error
 
 
 def find_description(value: Any) -> str:
@@ -332,15 +350,28 @@ def fetch_detail(
     detail_api_url: str,
     headers: dict[str, str],
     job: Job,
+    timeout: float,
+    retries: int,
 ) -> dict[str, Any] | None:
     if not job.encrypt_job_id:
         return None
     url = detail_api_url.format(encryptJobId=job.encrypt_job_id, jobId=job.encrypt_job_id, lid=job.encrypt_job_id)
-    resp = session.get(url, headers=headers, timeout=20)
-    if resp.status_code in {401, 403, 429}:
-        raise RuntimeError(f"Detail blocked or unauthenticated: HTTP {resp.status_code}.")
-    resp.raise_for_status()
-    return resp.json()
+    last_error: Exception | None = None
+    for attempt in range(1, retries + 2):
+        try:
+            resp = session.get(url, headers=headers, timeout=timeout)
+            if resp.status_code in {401, 403, 429}:
+                raise RuntimeError(f"Detail blocked or unauthenticated: HTTP {resp.status_code}.")
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+            if attempt > retries:
+                break
+            sleep_seconds = min(10 * attempt, 30)
+            print(f"detail request failed, retry {attempt}/{retries}: {exc}")
+            time.sleep(sleep_seconds)
+    raise RuntimeError(f"Detail request failed after {retries + 1} attempts: {last_error}") from last_error
 
 
 def salary_midpoint(salary: str) -> float | None:
@@ -463,7 +494,17 @@ def main() -> int:
 
     for keyword in keywords:
         for page in range(1, args.pages + 1):
-            payload = fetch_page(session, args.search_url, headers, keyword, args.city, page, args.page_size)
+            payload = fetch_page(
+                session,
+                args.search_url,
+                headers,
+                keyword,
+                args.city,
+                page,
+                args.page_size,
+                args.timeout,
+                args.retries,
+            )
             items = extract_jobs(payload)
             print(f"{keyword} page {page}: {len(items)} jobs")
             if not items:
@@ -478,7 +519,7 @@ def main() -> int:
                     continue
 
                 if args.detail_api_url:
-                    detail_payload = fetch_detail(session, args.detail_api_url, headers, job)
+                    detail_payload = fetch_detail(session, args.detail_api_url, headers, job, args.timeout, args.retries)
                     if detail_payload:
                         job.raw["detailPayload"] = detail_payload
                         detail_text = find_description(detail_payload)

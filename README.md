@@ -93,6 +93,8 @@ python3 boss_ai_jobs.py -k AI运维 --city 101020100 --pages 3 \
 | `--detail-api-url` | 详情接口模板，用来抓完整岗位职责。 | `--detail-api-url 'https://...?jobId={encryptJobId}'` |
 | `--delay-min` | 两次请求之间的最小等待秒数。 | `--delay-min 3` |
 | `--delay-max` | 两次请求之间的最大等待秒数。 | `--delay-max 8` |
+| `--timeout` | 单次 HTTP 请求最长等待秒数。 | `--timeout 60` |
+| `--retries` | 超时或网络错误后的重试次数。 | `--retries 3` |
 | `--debug` | 某页返回 0 个岗位时，打印响应摘要。 | `--debug` |
 | `--debug-out` | 保存调试响应 JSON。 | `--debug-out boss_debug_response.json` |
 
@@ -103,6 +105,13 @@ python3 boss_ai_jobs.py -k AI运维 --city 101020100 --pages 3 \
 ```bash
 export BOSS_COOKIE='你的 Cookie'
 python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --debug
+```
+
+如果报 `Read timed out`，先把超时时间拉长并减少页数：
+
+```bash
+python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --headers headers.json \
+  --timeout 60 --retries 3 --delay-min 15 --delay-max 30 --debug
 ```
 
 `headers.json` 支持两种格式。
