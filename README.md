@@ -105,6 +105,26 @@ export BOSS_COOKIE='你的 Cookie'
 python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --debug
 ```
 
+`headers.json` 支持两种格式。
+
+JSON 格式：
+
+```json
+{
+  "user-agent": "Mozilla/5.0 ...",
+  "referer": "https://www.zhipin.com/web/geek/job",
+  "cookie": "你的 Cookie"
+}
+```
+
+也可以直接粘贴浏览器 Network 里的原始 Request Headers：
+
+```text
+user-agent: Mozilla/5.0 ...
+referer: https://www.zhipin.com/web/geek/job
+cookie: 你的 Cookie
+```
+
 看终端里的 `message/msg/code`：
 
 | 现象 | 含义 |

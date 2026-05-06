@@ -143,12 +143,42 @@ def load_headers(path: str | None, cookie: str | None) -> dict[str, str]:
         "referer": "https://www.zhipin.com/web/geek/job",
     }
     if path:
-        with open(path, "r", encoding="utf-8") as f:
-            headers.update(json.load(f))
+        headers.update(load_headers_file(path))
 
     cookie_value = cookie or os.getenv("BOSS_COOKIE")
     if cookie_value:
         headers["cookie"] = cookie_value
+    return headers
+
+
+def load_headers_file(path: str) -> dict[str, str]:
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read().strip()
+    if not content:
+        raise ValueError(f"{path} is empty. Paste Request Headers into it first.")
+
+    try:
+        value = json.loads(content)
+    except json.JSONDecodeError:
+        value = parse_raw_headers(content)
+
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must be a JSON object or raw Request Headers text.")
+    return {str(k).strip().lower(): str(v).strip() for k, v in value.items() if str(k).strip() and str(v).strip()}
+
+
+def parse_raw_headers(content: str) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith(":"):
+            continue
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        headers[key.strip().lower()] = value.strip()
+    if not headers:
+        raise ValueError("headers file is not valid JSON and no 'key: value' header lines were found.")
     return headers
 
 
