@@ -128,6 +128,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delay-min", type=float, default=2.5, help="Minimum delay between requests.")
     parser.add_argument("--delay-max", type=float, default=6.0, help="Maximum delay between requests.")
     parser.add_argument("--analyze", action="store_true", help="Print salary and responsibility skill analysis.")
+    parser.add_argument("--debug", action="store_true", help="Print response summary when a page returns no jobs.")
+    parser.add_argument("--debug-out", default="boss_debug_response.json", help="Save the first empty response JSON here.")
     return parser.parse_args()
 
 
@@ -152,10 +154,32 @@ def load_headers(path: str | None, cookie: str | None) -> dict[str, str]:
 
 def extract_jobs(payload: dict[str, Any]) -> list[dict[str, Any]]:
     zp_data = payload.get("zpData") or payload.get("data") or {}
-    job_list = zp_data.get("jobList") or zp_data.get("jobs") or []
+    job_list = (
+        zp_data.get("jobList")
+        or zp_data.get("jobs")
+        or zp_data.get("list")
+        or payload.get("jobList")
+        or payload.get("jobs")
+        or []
+    )
     if not isinstance(job_list, list):
         return []
     return [item for item in job_list if isinstance(item, dict)]
+
+
+def debug_response(payload: dict[str, Any], path: str) -> None:
+    summary = {
+        "top_keys": list(payload.keys()),
+        "code": payload.get("code"),
+        "message": payload.get("message") or payload.get("msg"),
+        "zpData_keys": list((payload.get("zpData") or {}).keys()) if isinstance(payload.get("zpData"), dict) else [],
+        "data_keys": list((payload.get("data") or {}).keys()) if isinstance(payload.get("data"), dict) else [],
+    }
+    print("debug response summary:")
+    print(json.dumps(summary, ensure_ascii=False, indent=2))
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    print(f"debug response saved: {path}")
 
 
 def pick(item: dict[str, Any], *keys: str) -> str:
@@ -413,6 +437,8 @@ def main() -> int:
             items = extract_jobs(payload)
             print(f"{keyword} page {page}: {len(items)} jobs")
             if not items:
+                if args.debug:
+                    debug_response(payload, args.debug_out)
                 break
 
             for item in items:

@@ -93,6 +93,25 @@ python3 boss_ai_jobs.py -k AI运维 --city 101020100 --pages 3 \
 | `--detail-api-url` | 详情接口模板，用来抓完整岗位职责。 | `--detail-api-url 'https://...?jobId={encryptJobId}'` |
 | `--delay-min` | 两次请求之间的最小等待秒数。 | `--delay-min 3` |
 | `--delay-max` | 两次请求之间的最大等待秒数。 | `--delay-max 8` |
+| `--debug` | 某页返回 0 个岗位时，打印响应摘要。 | `--debug` |
+| `--debug-out` | 保存调试响应 JSON。 | `--debug-out boss_debug_response.json` |
+
+## 返回 0 jobs 怎么排查
+
+先跑一页调试：
+
+```bash
+export BOSS_COOKIE='你的 Cookie'
+python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --debug
+```
+
+看终端里的 `message/msg/code`：
+
+| 现象 | 含义 |
+| --- | --- |
+| `message` 提示登录/安全/验证 | Cookie 或请求头不够，重新复制浏览器里的完整 `cookie`，必要时用 `--headers headers.json` 带完整请求头。 |
+| `zpData_keys/data_keys` 里没有 `jobList/jobs/list` | Boss 接口字段变了，打开 `boss_debug_response.json` 看真实列表字段。 |
+| `code` 正常但列表确实空 | 关键词、城市、筛选条件导致无结果；换 `-k 大模型` 或城市码验证。 |
 
 ## 常见城市码
 
