@@ -95,6 +95,7 @@ python3 boss_ai_jobs.py -k AI运维 --city 101020100 --pages 3 \
 | `--delay-max` | 两次请求之间的最大等待秒数。 | `--delay-max 8` |
 | `--timeout` | 单次 HTTP 请求最长等待秒数。 | `--timeout 60` |
 | `--retries` | 超时或网络错误后的重试次数。 | `--retries 3` |
+| `--continue-on-error` | 某个关键词/页请求失败时继续保存已抓数据。 | `--continue-on-error` |
 | `--debug` | 某页返回 0 个岗位时，打印响应摘要。 | `--debug` |
 | `--debug-out` | 保存调试响应 JSON。 | `--debug-out boss_debug_response.json` |
 
@@ -112,6 +113,12 @@ python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --debug
 ```bash
 python3 boss_ai_jobs.py -k 运维 --city 101010100 --pages 1 --headers headers.json \
   --timeout 60 --retries 3 --delay-min 15 --delay-max 30 --debug
+```
+
+如果 Docker 里一直超时，优先判断为当前运行环境到 Boss 的网络/风控问题，不是脚本字段问题。建议在登录 Boss 的同一台桌面机器运行，或先用下面命令验证 Docker 网络是否能拿到响应头：
+
+```bash
+curl -I --max-time 20 https://www.zhipin.com/
 ```
 
 `headers.json` 支持两种格式。

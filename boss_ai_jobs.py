@@ -129,6 +129,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--delay-max", type=float, default=6.0, help="Maximum delay between requests.")
     parser.add_argument("--timeout", type=float, default=40.0, help="HTTP request timeout in seconds.")
     parser.add_argument("--retries", type=int, default=2, help="Retries per request after timeout/network errors.")
+    parser.add_argument("--continue-on-error", action="store_true", help="Save partial results and continue after request errors.")
     parser.add_argument("--analyze", action="store_true", help="Print salary and responsibility skill analysis.")
     parser.add_argument("--debug", action="store_true", help="Print response summary when a page returns no jobs.")
     parser.add_argument("--debug-out", default="boss_debug_response.json", help="Save the first empty response JSON here.")
@@ -494,17 +495,30 @@ def main() -> int:
 
     for keyword in keywords:
         for page in range(1, args.pages + 1):
-            payload = fetch_page(
-                session,
-                args.search_url,
-                headers,
-                keyword,
-                args.city,
-                page,
-                args.page_size,
-                args.timeout,
-                args.retries,
-            )
+            try:
+                payload = fetch_page(
+                    session,
+                    args.search_url,
+                    headers,
+                    keyword,
+                    args.city,
+                    page,
+                    args.page_size,
+                    args.timeout,
+                    args.retries,
+                )
+            except RuntimeError as exc:
+                print(f"request error: keyword={keyword}, page={page}, error={exc}", file=sys.stderr)
+                print(
+                    "diagnosis: no response body was received. This is usually Docker/server egress, network throttling, "
+                    "or the target site holding the connection. Try running on the same desktop browser machine.",
+                    file=sys.stderr,
+                )
+                if args.continue_on_error:
+                    break
+                write_outputs(jobs, Path(args.out), Path(args.jsonl), Path(args.skill_stats_out))
+                print(f"\u5df2\u4fdd\u5b58\u5df2\u6293\u5230\u7684\u6570\u636e: {args.out}, {args.jsonl}, {args.skill_stats_out}")
+                return 1
             items = extract_jobs(payload)
             print(f"{keyword} page {page}: {len(items)} jobs")
             if not items:
