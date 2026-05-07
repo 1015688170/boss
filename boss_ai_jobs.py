@@ -21,7 +21,7 @@ from collections import Counter, defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 import requests
 
@@ -119,6 +119,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--jsonl", default="boss_ai_jobs.jsonl", help="Raw JSONL output path.")
     parser.add_argument("--skill-stats-out", default="boss_skill_stats.csv", help="Skill statistics CSV output path.")
     parser.add_argument("--search-url", default=DEFAULT_SEARCH_URL, help="Search API URL.")
+    parser.add_argument("--method", choices=["GET", "POST"], default="GET", help="Search API HTTP method.")
+    parser.add_argument("--post-data", help="Raw form body for POST requests. query/city/page/pageSize will override it.")
     parser.add_argument(
         "--detail-api-url",
         help="Optional detail API URL template, e.g. https://.../detail?jobId={encryptJobId}",
@@ -167,7 +169,9 @@ def load_headers_file(path: str) -> dict[str, str]:
 
     if not isinstance(value, dict):
         raise ValueError(f"{path} must be a JSON object or raw Request Headers text.")
-    return {str(k).strip().lower(): str(v).strip() for k, v in value.items() if str(k).strip() and str(v).strip()}
+    skip_headers = {"host", "connection", "content-length"}
+    loaded = {str(k).strip().lower(): str(v).strip() for k, v in value.items() if str(k).strip() and str(v).strip()}
+    return {k: v for k, v in loaded.items() if k not in skip_headers}
 
 
 def parse_raw_headers(content: str) -> dict[str, str]:
@@ -305,13 +309,20 @@ def fetch_page(
     page_size: int,
     timeout: float,
     retries: int,
+    method: str,
+    post_data: str | None,
 ) -> dict[str, Any]:
     params = {"query": keyword, "city": city, "page": page, "pageSize": page_size}
-    url = f"{search_url}?{urlencode(params)}"
+    url = f"{search_url}?{urlencode({'_': int(time.time() * 1000)})}" if method == "POST" else f"{search_url}?{urlencode(params)}"
+    form_data = dict(parse_qsl(post_data or "", keep_blank_values=True))
+    form_data.update(params)
     last_error: Exception | None = None
     for attempt in range(1, retries + 2):
         try:
-            resp = session.get(url, headers=headers, timeout=timeout)
+            if method == "POST":
+                resp = session.post(url, headers=headers, data=form_data, timeout=timeout)
+            else:
+                resp = session.get(url, headers=headers, timeout=timeout)
             if resp.status_code in {401, 403, 429}:
                 raise RuntimeError(
                     f"Blocked or unauthenticated: HTTP {resp.status_code}. Refresh Cookie/headers and slow down."
@@ -506,6 +517,8 @@ def main() -> int:
                     args.page_size,
                     args.timeout,
                     args.retries,
+                    args.method,
+                    args.post_data,
                 )
             except RuntimeError as exc:
                 print(f"request error: keyword={keyword}, page={page}, error={exc}", file=sys.stderr)

@@ -90,6 +90,8 @@ python3 boss_ai_jobs.py -k AI运维 --city 101020100 --pages 3 \
 | `--cookie` | 直接传 Cookie；也可以用环境变量 `BOSS_COOKIE`。 | `--cookie 'xxx'` |
 | `--headers` | 从 JSON 文件读取完整请求头。 | `--headers headers.json` |
 | `--search-url` | 搜索列表接口地址；通常不用改。 | `--search-url 'https://...'` |
+| `--method` | 搜索接口请求方法；你抓到 POST 时传 `POST`。 | `--method POST` |
+| `--post-data` | POST 请求的表单 body；脚本会自动覆盖 `query/city/page/pageSize`。 | `--post-data 'scene=1&query=运维'` |
 | `--detail-api-url` | 详情接口模板，用来抓完整岗位职责。 | `--detail-api-url 'https://...?jobId={encryptJobId}'` |
 | `--delay-min` | 两次请求之间的最小等待秒数。 | `--delay-min 3` |
 | `--delay-max` | 两次请求之间的最大等待秒数。 | `--delay-max 8` |
@@ -139,6 +141,18 @@ JSON 格式：
 user-agent: Mozilla/5.0 ...
 referer: https://www.zhipin.com/web/geek/job
 cookie: 你的 Cookie
+```
+
+如果你复制的是完整请求，例如第一行是 `POST /wapi/... HTTP/1.1`，可以直接保留；脚本会忽略这行。但不要把表单 body 粘进 `headers.json`，body 要用 `--post-data` 传。
+
+POST 示例：
+
+```bash
+python3 boss_ai_jobs.py -k ai运维 --city 101010100 --pages 1 \
+  --headers headers.json \
+  --method POST \
+  --post-data 'query=ai%E8%BF%90%E7%BB%B4&city=101010100&page=1&pageSize=30' \
+  --timeout 60 --retries 3 --debug
 ```
 
 看终端里的 `message/msg/code`：
